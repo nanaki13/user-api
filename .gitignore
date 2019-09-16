@@ -6,3 +6,4 @@ gatling/target
 project/project/target
 project/target
 target
+logs/application.json

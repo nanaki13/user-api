@@ -1,9 +1,11 @@
 package model;
 
 
-case class UserInputForm(email : String,  password : String,login : String )
+case class UserInputForm(email : String,login : String,  password : String )
 
 object  UserInputForm{
-  def apply (email : String,  password : String): UserInputForm = UserInputForm(email : String,  password : String,"")
-  def unapplyShort( e : UserInputForm ) = Some(e.email,e.password)
+  def apply (email : String,  password : String): UserInputForm = UserInputForm(email , "", password)
+  def applyMailLogin (email : String,  login : String): UserInputForm = UserInputForm(email , login, "")
+  def unapplyMailLogin (e : UserInputForm)= Some(e.email,e.login)
+  def mailPasswordOption(e : UserInputForm ) = Some(e.email,e.password)
 }

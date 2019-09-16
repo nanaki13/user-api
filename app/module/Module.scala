@@ -2,35 +2,30 @@ package module
 
 import com.google.inject.name.Named
 import com.google.inject.{AbstractModule, Provides}
-import com.mohiva.play.silhouette.api.crypto.{AuthenticatorEncoder, Crypter, CrypterAuthenticatorEncoder}
+import com.mohiva.play.silhouette.api._
+import com.mohiva.play.silhouette.api.crypto.{Crypter, CrypterAuthenticatorEncoder}
 import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
 import com.mohiva.play.silhouette.api.services.AuthenticatorService
-import com.mohiva.play.silhouette.api.util.{Clock, IDGenerator, PasswordHasherRegistry, PasswordInfo}
-import com.mohiva.play.silhouette.api._
+import com.mohiva.play.silhouette.api.util.{Clock, PasswordHasherRegistry, PasswordInfo}
 import com.mohiva.play.silhouette.crypto.{JcaCrypter, JcaCrypterSettings}
 import com.mohiva.play.silhouette.impl.authenticators.{JWTAuthenticator, JWTAuthenticatorService, JWTAuthenticatorSettings}
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import com.mohiva.play.silhouette.impl.util.SecureRandomIDGenerator
 import com.mohiva.play.silhouette.password.{BCryptPasswordHasher, BCryptSha256PasswordHasher}
-import com.mohiva.play.silhouette.persistence.daos.{DelegableAuthInfoDAO, InMemoryAuthInfoDAO}
+import com.mohiva.play.silhouette.persistence.daos.DelegableAuthInfoDAO
 import com.mohiva.play.silhouette.persistence.repositories.DelegableAuthInfoRepository
-import javax.inject._
+import javax.inject.Singleton
+import model.User
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ArbitraryTypeReader._
-import net.ceedubs.ficus.readers.ValueReader
-import model.User
 import net.codingwell.scalaguice.ScalaModule
-import play.api.{ConfigLoader, Configuration}
-import repository.UserRepository
-
-import scala.concurrent.duration._
-import scala.language.postfixOps
+import play.api.Configuration
+import repository.{UserRepository, UserRepositoryImpl}
 import service.UserService
-import v1.post._
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
-import scala.reflect.ClassTag
+import scala.concurrent.duration._
+import scala.language.postfixOps
 /**
   * Sets up custom components for Play.
   *
@@ -41,7 +36,7 @@ class  Module(environment: play.api.Environment, configuration: Configuration)
     with ScalaModule {
 
   override def configure() = {
-    bind[PostRepository].to[PostRepositoryImpl].in[Singleton]
+   bind[UserRepository].to[UserRepositoryImpl].in[Singleton]
     bind[Silhouette[JWTEnv]].to[SilhouetteProvider[JWTEnv]]
   }
 
@@ -94,7 +89,7 @@ class  Module(environment: play.api.Environment, configuration: Configuration)
     )
   }
   @Provides
-  def providePasswordInfoDAO(userRepository: UserRepository): DelegableAuthInfoDAO[PasswordInfo] = {
+  def providePasswordInfoDAO(userRepository: UserRepository with DelegableAuthInfoDAO[PasswordInfo]): DelegableAuthInfoDAO[PasswordInfo] = {
     userRepository
   }
 
