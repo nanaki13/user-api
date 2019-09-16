@@ -1,2 +1,8 @@
 *.class
 *.log
+.idea
+docs
+gatling/target
+project/project/target
+project/target
+target
