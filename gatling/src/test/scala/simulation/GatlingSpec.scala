@@ -18,7 +18,7 @@ class GatlingSpec extends Simulation {
 
   val indexReq = repeat(500) {
     exec(
-      http("Index").get("/").check(status.is(200))
+      http("signIn").get("/user").check(status.is(200))
     )
   }
 

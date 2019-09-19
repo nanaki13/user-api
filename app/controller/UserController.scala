@@ -2,12 +2,16 @@ package controller
 
 import com.mohiva.play.silhouette.api._
 import com.mohiva.play.silhouette.api.services.AuthenticatorResult
-import com.mohiva.play.silhouette.api.util.Credentials
+import com.mohiva.play.silhouette.api.util.{Credentials, PasswordInfo}
 import com.mohiva.play.silhouette.impl.exceptions.IdentityNotFoundException
+import javax.imageio.spi.ImageReaderWriterSpi
 import javax.inject.Inject
-import model.{User, UserInputForm}
+import model.{Role, User, UserInputForm, UserUpdateForm}
+import model.User._
 import play.api.data.Form
-import play.api.libs.json.{Format, Json}
+import play.api.http.Writeable
+import play.api.i18n.MessagesProvider
+import play.api.libs.json.{Format, JsValue, Json}
 import play.api.mvc.{Result, _}
 import security.Token._
 import security.{Provider, Token}
@@ -23,9 +27,9 @@ class UserController @Inject()(pcc: UserControllerComponents
 
     Form(
       mapping(
-        "email" -> nonEmptyText,
+        "email" -> email,
         "login" -> nonEmptyText,
-        "password" -> nonEmptyText
+        "password" -> nonEmptyText,
       )(UserInputForm.apply)(UserInputForm.unapply)
     )
   }
@@ -41,14 +45,17 @@ class UserController @Inject()(pcc: UserControllerComponents
     )
   }
 
-  private val formUpdateUser: Form[UserInputForm] = {
+
+  private val formUpdateUser: Form[UserUpdateForm] = {
     import play.api.data.Forms._
 
     Form(
       mapping(
-        "email" -> nonEmptyText,
-        "login" -> nonEmptyText
-      )(UserInputForm.applyMailLogin)(UserInputForm.unapplyMailLogin)
+        "id" -> number,
+        "email" -> optional(nonEmptyText),
+        "login" -> optional(nonEmptyText),
+        "password" -> optional(nonEmptyText)
+      )(UserUpdateForm.apply)(UserUpdateForm.unapply)
     )
   }
 
@@ -89,14 +96,7 @@ class UserController @Inject()(pcc: UserControllerComponents
     }
   }
 
-  def update: Action[AnyContent] = userAction.async { implicit request =>
-    silhouette.SecuredRequestHandler { userAwareRequest =>
-      processJsonUpdate().map( HandlerResult(_, Some("yes")))
-    }.map {
-      case HandlerResult(r, Some(s)) => Ok(Json.toJson(s))
-      case HandlerResult(r, None) => Unauthorized
-    }
-  }
+
 
   def index: Action[AnyContent] = userAction.async { implicit request =>
     silhouette.SecuredRequestHandler { userAwareRequest =>
@@ -108,6 +108,7 @@ class UserController @Inject()(pcc: UserControllerComponents
   }
 
   def signUp: Action[AnyContent] = userAction.async { implicit request =>
+
     processJsonPostUser()
   }
 
@@ -119,20 +120,83 @@ class UserController @Inject()(pcc: UserControllerComponents
 
   }
 
+  def admin(implicit role: Role) = role == Role.ADMIN
 
+  def update: Action[AnyContent] = userAction.async { implicit request =>
+    silhouette.SecuredRequestHandler { userAwareRequest =>
+      val pro = processJsonUpdate(userAwareRequest.identity, request)
+      pro.map(e =>{  HandlerResult(e._1, Some(e._2))})
 
-  private def processJsonUpdate[A]()(implicit request: UserRequest[A]): Future[Result] = {
-    def failure(badForm: Form[UserInputForm]): Future[Result] = {
-      Future.successful(AuthenticatorResult(BadRequest(badForm.errorsAsJson)))
+    }.map {
+      case HandlerResult(s, Some(user: User)) =>Status(s.header.status)(Json.toJson(user))
+      case HandlerResult(s, Some(js: JsValue)) =>Status(s.header.status)(js)
+      case HandlerResult(r, None) => Status(r.header.status)(Json.toJson(Message("one result from process", r.header.status)))
+      case e => InternalServerError(Json.toJson(Message("Unexpected response")))
     }
-
-    def success(input: UserInputForm): Future[Result] = {
-
-      Future.successful(AuthenticatorResult(Ok()))
-
-    }
-    formUpdateUser.fold(failure,success)
   }
+
+  private def processJsonUpdate[A](implicit authUser: User, request: UserRequest[A]): Future[(Status, Any)] = {
+    implicit val role = authUser.role
+
+    def failure(badForm: Form[UserUpdateForm]): Future[(Status, Any)] = {
+      Future.successful(BadRequest, badForm.errorsAsJson)
+    }
+
+    def success(input: UserUpdateForm): Future[(Status, Any)] = {
+      val userId = authUser.id
+      if (input.id == userId || admin) {
+        val userSource = if (admin && !(input.id == userId)) {
+          pcc.userService.find(input.id)
+        } else {
+          Future.successful[Option[User]](Some(authUser))
+        }
+        userSource.flatMap {
+          case None => Future.successful(Status(NOT_MODIFIED), Message(s"Not found ${userId}"))
+          case Some(user) => updateUser(input)(user)
+        }
+      } else {
+        Future.successful(Unauthorized, Message("You can't"))
+      }
+    }
+    formUpdateUser.bindFromRequest().fold(failure, success)
+  }
+
+  def updateUser(input: UserUpdateForm)(implicit user: User): Future[(Status, Any)] = {
+    val upddatOrGetPass: Future[Option[PasswordInfo]] = input.password match {
+      case Some(pass) => {
+        val newHashPass = pcc.passwordHasherRegistry.current.hash(pass)
+        pcc.authInfoRepository.update(user.loginInfo, newHashPass).map(Some(_))
+      }
+      case None => Future.successful(user.passwordInfo)
+    }
+
+    for {
+      pInfo <- upddatOrGetPass
+      userUpdated <-  pcc.userService.update(
+        user.copy(
+          login = input.login.getOrElse(user.login),
+          email = input.email.getOrElse(user.email),
+          loginInfo = input.login.map(LoginInfo(Provider.name, _)).getOrElse(user.loginInfo),
+          passwordInfo = pInfo
+        )).map { e =>
+        if (input.login.isEmpty && input.email.get != user.email) {
+          pcc.authInfoRepository.remove(user.loginInfo)
+          pcc.authInfoRepository.save(e.get.loginInfo, pInfo.get)
+
+        }
+        e
+      }
+    } yield {
+      userUpdated match {
+        case Some(u)=>  (Ok, u)
+        case None =>  (Status(NOT_MODIFIED), "")
+      }
+
+    }
+
+
+  }
+
 
   private def processJsonSignIn[A]()(
     implicit request: UserRequest[A]): Future[Result] = {
@@ -142,11 +206,12 @@ class UserController @Inject()(pcc: UserControllerComponents
 
     def success(input: UserInputForm): Future[AuthenticatorResult] = {
 
-
       val credentials = Credentials(input.email, input.password)
+
       pcc.credentialsProvider.authenticate(credentials).flatMap(
         loginInfo => {
           pcc.userService.retrieve(loginInfo).flatMap {
+
             case Some(user) => silhouette.env.authenticatorService.create(user.loginInfo).flatMap(authenticator => {
               silhouette.env.eventBus.publish(LoginEvent(user, request))
               silhouette.env.authenticatorService.init(authenticator).flatMap { token =>
@@ -167,12 +232,6 @@ class UserController @Inject()(pcc: UserControllerComponents
     formLoginUser.bindFromRequest().fold(failure, success)
   }
 
-  case class Message(text: String)
-
-  object Message {
-    implicit val format: Format[Message] = Json.format
-  }
-
 
   private def processJsonPostUser[A]()(
 
@@ -186,7 +245,6 @@ class UserController @Inject()(pcc: UserControllerComponents
         case None =>
           val authInfo = pcc.passwordHasherRegistry.current.hash(input.password)
           val res: Future[Result] = for {
-
             user <- pcc.userService.create(loginInfo, input)
             a <- pcc.authInfoRepository.save(loginInfo, authInfo)
           } yield {
@@ -199,7 +257,10 @@ class UserController @Inject()(pcc: UserControllerComponents
       }
     }
 
-    def failure(input: Form[UserInputForm]): Future[Result] = Future.successful(BadRequest(input.errorsAsJson))
+    def failure(input: Form[UserInputForm]): Future[Result] = {
+      print(input)
+      Future.successful(BadRequest(input.errorsAsJson))
+    }
 
     formNewUser.bindFromRequest().fold(failure, success)
   }
@@ -208,6 +269,15 @@ class UserController @Inject()(pcc: UserControllerComponents
 }
 
 
+case class Message(text: String, statusHttp: Option[Int] = None)
+
+object Message {
+  def apply(text: String, statusHttp: Int): Message = {
+    Message(text, Some(statusHttp))
+  }
+
+  implicit val format: Format[Message] = Json.format
+}
 
 
 

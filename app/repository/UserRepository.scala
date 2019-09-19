@@ -17,25 +17,23 @@ import scala.reflect.ClassTag
 
 class UserRepositoryImpl @Inject()(implicit val userExecutionContext: UserExecutionContext)  extends  DelegableAuthInfoDAO[PasswordInfo] with UserRepository {
   def findByLoginInfo(loginInfo: LoginInfo): Future[Option[User]] = Future {
-    println(users)
-    println(loginInfo)
-    val f = users.find(_.email == loginInfo.providerKey)
-    println(f)
-    f
+    users.find(_.email == loginInfo.providerKey)
+
   }
 
   def create(user: User): Future[User] = Future {
-    val userNEw = new User(users.map(_.id).max + 1,user.login,user.email ,user.loginInfo,Role.USER)
+    val maxId = if (users.isEmpty) 0 else {
+      users.map(_.id).max + 1
+    }
+    val userNEw = new User(maxId,user.login,user.email ,user.loginInfo,Role.USER)
     users += userNEw
-    println(users)
-
     userNEw
   }
 
-  def update(user: User): Future[Boolean] = Future {
-    users.zipWithIndex.find(_._1.email == user.loginInfo.providerKey) match {
-      case Some(index) => users(index._2) =  user ; true
-      case None => false
+  def update(user: User): Future[Option[User]] = Future {
+    users.zipWithIndex.find(_._1.id == user.id) match {
+      case Some(index) => users(index._2) =  user ; Some(user.copy())
+      case _ => None
     }
   }
 
@@ -78,7 +76,7 @@ class UserRepositoryImpl @Inject()(implicit val userExecutionContext: UserExecut
     */
   def find(loginInfo: LoginInfo): Future[Option[PasswordInfo]] = {
     findByLoginInfo(loginInfo).map{
-      case Some(user) => user.passwordInfo
+      case Some(user) => {user.passwordInfo}
       case None => None
     }
   }
@@ -99,7 +97,7 @@ trait UserRepository {
 
   def create(user: User): Future[User]
 
-  def update(user: User): Future[Boolean]
+  def update(user: User): Future[Option[User]]
 
 
   def find(id: Int): Future[Option[User]]

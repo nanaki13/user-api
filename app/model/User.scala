@@ -10,7 +10,7 @@ final case class User(id: Int, login : String ,email: String , loginInfo: LoginI
 
 object User{
 //  implicit val noFormat: Format[Option[_]] =
-//  implicit val format :Format[User]= Json.format
+
   def apply(login : String ,email: String ) : User = {
     User(-1,login,email, LoginInfo(Provider.name,email),Role.USER)
   }
@@ -31,4 +31,8 @@ object User{
     (JsPath \ "login").write[String] and
       (JsPath \ "email").write[String]
     )((user) => (user.login,user.email))
+
+  implicit val formatPass :Format[PasswordInfo]= Json.format[PasswordInfo]
+  implicit val format :Format[User]= Json.format[User]
+
 }

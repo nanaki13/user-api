@@ -22,5 +22,6 @@ case class UserControllerComponents @Inject()(
                                                , messagesApi: MessagesApi
                                                , langs: Langs
                                                , fileMimeTypes: FileMimeTypes
-                                               , executionContext: scala.concurrent.ExecutionContext)
+                                               , executionContext: scala.concurrent.ExecutionContext,
+                                             )
   extends ControllerComponents

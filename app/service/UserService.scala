@@ -10,6 +10,10 @@ import repository.UserRepository
 import scala.concurrent.Future
 
 class UserService@Inject()(userRepository: UserRepository)extends IdentityService[User] {
+  def find(id: Int) = userRepository.find(id)
+
+  def update(user: User) = userRepository.update(user)
+
 
   /**
     * Retrieves a user that matches the specified login info.
