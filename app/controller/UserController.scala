@@ -12,19 +12,18 @@ import play.api.data.Form
 import play.api.http.Writeable
 import play.api.i18n.MessagesProvider
 import play.api.libs.json.{Format, JsValue, Json}
-import play.api.mvc.{Result, _}
+import play.api.mvc.{Action, Result, _}
 import security.Token._
 import security.{Provider, Token}
-
+import play.api.data.Forms._
 import scala.concurrent.{ExecutionContext, Future}
 
 class UserController @Inject()(pcc: UserControllerComponents
                               )(implicit val ec: ExecutionContext) extends UserBaseController(pcc) {
 
 
-  private val formNewUser: Form[UserInputForm] = {
-    import play.api.data.Forms._
 
+  private val formNewUser: Form[UserInputForm] = {
     Form(
       mapping(
         "email" -> email,
@@ -35,8 +34,6 @@ class UserController @Inject()(pcc: UserControllerComponents
   }
 
   private val formLoginUser: Form[UserInputForm] = {
-    import play.api.data.Forms._
-
     Form(
       mapping(
         "email" -> nonEmptyText,
@@ -47,8 +44,6 @@ class UserController @Inject()(pcc: UserControllerComponents
 
 
   private val formUpdateUser: Form[UserUpdateForm] = {
-    import play.api.data.Forms._
-
     Form(
       mapping(
         "id" -> number,
@@ -58,6 +53,8 @@ class UserController @Inject()(pcc: UserControllerComponents
       )(UserUpdateForm.apply)(UserUpdateForm.unapply)
     )
   }
+
+
 
   /**
     * An example for a secured request handler.
@@ -97,10 +94,23 @@ class UserController @Inject()(pcc: UserControllerComponents
   }
 
 
-
   def index: Action[AnyContent] = userAction.async { implicit request =>
     silhouette.SecuredRequestHandler { userAwareRequest =>
-      pcc.userService.getAll().map(users => HandlerResult(Ok, Some(users)))
+      val role = userAwareRequest.identity.role
+      val authenticatedUser: User = userAwareRequest.identity
+      if (role.canCreate(Role.USER)) {
+        for {
+          result <- pcc.userService.getAll().map { iterUser =>
+            iterUser.filter(uLoop => authenticatedUser.canRead(uLoop))
+          }
+
+        } yield {
+          HandlerResult(Ok, Some(result))
+        }
+      } else {
+        Future.successful(HandlerResult(Unauthorized, None))
+      }
+
     }.map {
       case HandlerResult(r, Some(users)) => Ok(Json.toJson(users))
       case HandlerResult(r, None) => Unauthorized
@@ -125,12 +135,47 @@ class UserController @Inject()(pcc: UserControllerComponents
   def update: Action[AnyContent] = userAction.async { implicit request =>
     silhouette.SecuredRequestHandler { userAwareRequest =>
       val pro = processJsonUpdate(userAwareRequest.identity, request)
-      pro.map(e =>{  HandlerResult(e._1, Some(e._2))})
+      pro.map(e => {
+        HandlerResult(e._1, Some(e._2))
+      })
 
     }.map {
-      case HandlerResult(s, Some(user: User)) =>Status(s.header.status)(Json.toJson(user))
-      case HandlerResult(s, Some(js: JsValue)) =>Status(s.header.status)(js)
-      case HandlerResult(r, None) => Status(r.header.status)(Json.toJson(Message("one result from process", r.header.status)))
+      case HandlerResult(s, Some(user: User)) => Status(s.header.status)(Json.toJson(user))
+      case HandlerResult(s, Some(js: JsValue)) => Status(s.header.status)(js)
+      case HandlerResult(r, None) => Status(r.header.status)(Json.toJson(Message("none result from process", r.header.status)))
+      case e => InternalServerError(Json.toJson(Message("Unexpected response")))
+    }
+  }
+
+  def delete(id: Int) = userAction.async { implicit request =>
+    silhouette.SecuredRequestHandler { userAwareRequest =>
+      val authUser =userAwareRequest.identity
+      if(authUser.role.canDelete()){
+       pcc.userService.find(id).flatMap{
+         case Some(u : User) => {
+           if(authUser.canDelete(u)){
+             pcc.userService.delete(id)
+           }else{
+             Future.successful( Unauthorized)
+           }
+         }
+         case _ => Future.successful( None)
+       }.map{ e =>
+         e match {
+           case true => HandlerResult(Ok,None)
+           case false=> HandlerResult(NoContent,None)
+           case None => HandlerResult(NoContent,None)
+           case Unauthorized =>  HandlerResult(Unauthorized,None)
+         }
+
+        }
+      }else{
+        Future.successful(HandlerResult(Unauthorized))
+      }
+    }.map {
+      case HandlerResult(Ok, _) => Ok
+      case HandlerResult(NoContent, _) => NoContent
+      case HandlerResult(r, None) => Status(r.header.status)(Json.toJson(Message("none result from process", r.header.status)))
       case e => InternalServerError(Json.toJson(Message("Unexpected response")))
     }
   }
@@ -144,20 +189,28 @@ class UserController @Inject()(pcc: UserControllerComponents
 
     def success(input: UserUpdateForm): Future[(Status, Any)] = {
       val userId = authUser.id
-      if (input.id == userId || admin) {
-        val userSource = if (admin && !(input.id == userId)) {
-          pcc.userService.find(input.id)
-        } else {
-          Future.successful[Option[User]](Some(authUser))
-        }
-        userSource.flatMap {
-          case None => Future.successful(Status(NOT_MODIFIED), Message(s"Not found ${userId}"))
-          case Some(user) => updateUser(input)(user)
-        }
+      if (input.id == userId || authUser.role > Role.USER) {
+          for{
+            findedUser <- pcc.userService.find(input.id)
+            ret <- {
+              findedUser match {
+                case Some(u) => if(authUser.canUpdate(u)){
+                  updateUser(input)(u)
+                }else{
+                  Future.successful(Unauthorized, Message("You can't"))
+                }
+                case None => Future.successful(Status(NOT_MODIFIED), AnyContentAsEmpty)
+              }
+            }
+          } yield {
+            ret
+          }
+
       } else {
         Future.successful(Unauthorized, Message("You can't"))
       }
     }
+
     formUpdateUser.bindFromRequest().fold(failure, success)
   }
 
@@ -172,7 +225,7 @@ class UserController @Inject()(pcc: UserControllerComponents
 
     for {
       pInfo <- upddatOrGetPass
-      userUpdated <-  pcc.userService.update(
+      userUpdated <- pcc.userService.update(
         user.copy(
           login = input.login.getOrElse(user.login),
           email = input.email.getOrElse(user.email),
@@ -188,8 +241,8 @@ class UserController @Inject()(pcc: UserControllerComponents
       }
     } yield {
       userUpdated match {
-        case Some(u)=>  (Ok, u)
-        case None =>  (Status(NOT_MODIFIED), "")
+        case Some(u) => (Ok, u)
+        case None => (Status(NOT_MODIFIED), "")
       }
 
     }

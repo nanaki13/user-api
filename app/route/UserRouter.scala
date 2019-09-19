@@ -12,5 +12,6 @@ class UserRouter @Inject()(userController: UserController) extends SimpleRouter{
     case POST(p"/signUp") =>  userController.signUp
     case POST(p"/signIn") =>  userController.signIn
     case PUT(p"/") =>  userController.update
+    case DELETE(p"/${id}"  ) =>  userController.delete(id.toInt)
   }
 }

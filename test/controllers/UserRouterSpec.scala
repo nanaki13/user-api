@@ -24,38 +24,68 @@ class UserRouterSpec extends PlaySpec with GuiceOneAppPerSuite with RouteInvoker
     Json.toJson(Json.obj(("id", e.id),("email", e.email), ("login", e.login), ("password", e.password)))
   }
   var token : Option[String]= None
-  var id : Int = -1
+  var userId : Int = -1
   "UserRouter" should {
 
 
     "check sign In" in {
       val request = FakeRequest(POST, "/user/signUp").withHeaders(("Content-Type" , "application/json"))
       val resp: Future[Result] = route(app, request, Json.toJson(UserInputForm("test.test@test.com", "foo", "pass"))(writerEmailLoginPassowrd)).get
-      status(resp) mustBe 200
+      status(resp) mustBe OK
       val user: User = Json.fromJson[User](contentAsJson(resp)).get
       user.login mustBe "foo"
-      id= user.id
-      val request2 = FakeRequest(POST, "/user/signIn").withHeaders(("Content-Type" , "application/json"))
-      val resp2: Future[Result] = route(app, request2, Json.toJson(UserInputForm("test.test@test.com", "foo", "pass"))(writerEmailPassword)).get
-      status(resp2) mustBe 200
-      token = Some(headers(resp).get("X-Auth-Token")).get
+      userId= user.id
 
     }
     "check sign Up" in {
       val request = FakeRequest(POST, "/user/signIn").withCSRFToken
       val resp: Future[Result] = route(app, request, Json.toJson(UserInputForm("test.test@test.com", "pass"))(writerEmailPassword)).get
-      status(resp) mustBe 200
-       token = Some(headers(resp).get("X-Auth-Token")).get
+      status(resp) mustBe OK
+      token = Some(headers(resp).get("X-Auth-Token")).get
+
+    }
+    "test 401 on get list" in {
+      val request = FakeRequest(GET, "/user")
+        .withHeaders(HOST -> "localhost:9000", "X-Auth-Token" -> token.get)
+        .withCSRFToken
+      val resp: Future[Result] = route(app, request,"").get
+      status(resp) mustBe UNAUTHORIZED
 
     }
     "check update" in {
       val request = FakeRequest(PUT, "/user")
         .withHeaders(HOST -> "localhost:9000", "X-Auth-Token" -> token.get)
         .withCSRFToken
-      val resp: Future[Result] = route(app, request, Json.toJson(UserUpdateForm(id,Some("test.test@test.com"),Some("bar"), None))(writeForUpdate)).get
+      val resp: Future[Result] = route(app, request, Json.toJson(UserUpdateForm(userId,Some("test.test@test.com"),Some("bar"), None))(writeForUpdate)).get
       val user: User = Json.fromJson[User](contentAsJson(resp)).get
       user.email mustBe "test.test@test.com"
       user.login mustBe "bar"
+    }
+
+    "test admin" in {
+      val email = app.configuration.get[String]("application.admin.email")
+      val password = app.configuration.get[String]("application.admin.password")
+      val request = FakeRequest(POST, "/user/signIn").withCSRFToken
+      val resp: Future[Result] = route(app, request, Json.toJson(UserInputForm(email, password))(writerEmailPassword)).get
+      status(resp) mustBe 200
+      token = Some(headers(resp).get("X-Auth-Token")).get
+
+    }
+
+    "test admin get list" in {
+      val request = FakeRequest(GET, "/user")
+        .withHeaders(HOST -> "localhost:9000", "X-Auth-Token" -> token.get)
+        .withCSRFToken
+      val resp: Future[Result] = route(app, request,"").get
+      status(resp) mustBe OK
+    }
+
+    "test admin delete" in {
+      val request = FakeRequest(DELETE, s"/user/${userId}")
+        .withHeaders(HOST -> "localhost:9000", "X-Auth-Token" -> token.get)
+        .withCSRFToken
+      val resp: Future[Result] = route(app, request,"").get
+      status(resp) mustBe OK
     }
   }
 }

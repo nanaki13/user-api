@@ -20,7 +20,7 @@ import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ArbitraryTypeReader._
 import net.codingwell.scalaguice.ScalaModule
 import play.api.Configuration
-import repository.{UserRepository, UserRepositoryImpl}
+import repository._
 import service.UserService
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -31,14 +31,22 @@ import scala.language.postfixOps
   *
   * https://www.playframework.com/documentation/latest/ScalaDependencyInjection
   */
-class  Module(environment: play.api.Environment, configuration: Configuration)
+class  Module(implicit environment: play.api.Environment, configuration: Configuration)
     extends AbstractModule
     with ScalaModule {
 
   override def configure() = {
-   bind[UserRepository].to[UserRepositoryImpl].in[Singleton]
+    if(configuration.get[Boolean]("persistence.inMemory")){
+      bind[UserRepository].to[InMemoryUserRepositoryImpl].in[Singleton]
+      bind[InitRepoBase].to[InitImemory].in[Singleton]
+    }else{
+      bind[UserRepository].to[DBUserRepo].in[Singleton]
+      bind[InitRepoBase].to[InitDB].in[Singleton]
+    }
+
     bind[Silhouette[JWTEnv]].to[SilhouetteProvider[JWTEnv]]
   }
+
 
 
   /**

@@ -1,6 +1,6 @@
 package service
 
-import com.mohiva.play.silhouette.api.LoginInfo
+import com.mohiva.play.silhouette.api.{HandlerResult, LoginInfo}
 import com.mohiva.play.silhouette.api.services.IdentityService
 import controller.UserControllerComponents
 import javax.inject.Inject
@@ -10,6 +10,10 @@ import repository.UserRepository
 import scala.concurrent.Future
 
 class UserService@Inject()(userRepository: UserRepository)extends IdentityService[User] {
+  def delete(idInt: Int): Future[Boolean] = {
+    userRepository.delete(idInt)
+  }
+
   def find(id: Int) = userRepository.find(id)
 
   def update(user: User) = userRepository.update(user)
