@@ -22,12 +22,11 @@ class UserController @Inject()(pcc: UserControllerComponents
                               )(implicit val ec: ExecutionContext) extends UserBaseController(pcc) {
 
 
-
   private val formNewUser: Form[UserInputForm] = {
     Form(
       mapping(
         "email" -> email,
-        "login" -> nonEmptyText,
+        "pseudonym" -> nonEmptyText,
         "password" -> nonEmptyText,
       )(UserInputForm.apply)(UserInputForm.unapply)
     )
@@ -48,49 +47,10 @@ class UserController @Inject()(pcc: UserControllerComponents
       mapping(
         "id" -> number,
         "email" -> optional(nonEmptyText),
-        "login" -> optional(nonEmptyText),
+        "pseudonym" -> optional(nonEmptyText),
         "password" -> optional(nonEmptyText)
       )(UserUpdateForm.apply)(UserUpdateForm.unapply)
     )
-  }
-
-
-
-  /**
-    * An example for a secured request handler.
-    */
-  def securedRequestHandler = Action.async { implicit request =>
-    silhouette.SecuredRequestHandler { securedRequest =>
-      Future.successful(HandlerResult(Ok, Some(securedRequest.identity)))
-    }.map {
-      case HandlerResult(r, Some(user)) => Ok(Json.toJson(user.login))
-      case HandlerResult(r, None) => Unauthorized
-    }
-  }
-
-  /**
-    * An example for an unsecured request handler.
-    */
-  def unsecuredRequestHandler = Action.async { implicit request =>
-    silhouette.UnsecuredRequestHandler { _ =>
-      Future.successful(HandlerResult(Ok, Some("some data")))
-    }.map {
-      case HandlerResult(r, Some(data)) => Ok(data)
-      case HandlerResult(r, None) => Forbidden
-    }
-  }
-
-  /**
-    * An example for a user-aware request handler.
-    */
-  def userAwareRequestHandler = Action.async { implicit request =>
-    silhouette.UserAwareRequestHandler { userAwareRequest =>
-
-      Future.successful(HandlerResult(Ok, userAwareRequest.identity))
-    }.map {
-      case HandlerResult(r, Some(user)) => Ok(Json.toJson(user.login))
-      case HandlerResult(r, None) => Unauthorized
-    }
   }
 
 
@@ -118,16 +78,12 @@ class UserController @Inject()(pcc: UserControllerComponents
   }
 
   def signUp: Action[AnyContent] = userAction.async { implicit request =>
-
     processJsonPostUser()
   }
 
 
   def signIn: Action[AnyContent] = userAction.async { implicit request =>
-
     processJsonSignIn()
-
-
   }
 
   def admin(implicit role: Role) = role == Role.ADMIN
@@ -149,31 +105,80 @@ class UserController @Inject()(pcc: UserControllerComponents
 
   def delete(id: Int) = userAction.async { implicit request =>
     silhouette.SecuredRequestHandler { userAwareRequest =>
-      val authUser =userAwareRequest.identity
-      if(authUser.role.canDelete()){
-       pcc.userService.find(id).flatMap{
-         case Some(u : User) => {
-           if(authUser.canDelete(u)){
-             pcc.userService.delete(id)
-           }else{
-             Future.successful( Unauthorized)
-           }
-         }
-         case _ => Future.successful( None)
-       }.map{ e =>
-         e match {
-           case true => HandlerResult(Ok,None)
-           case false=> HandlerResult(NoContent,None)
-           case None => HandlerResult(NoContent,None)
-           case Unauthorized =>  HandlerResult(Unauthorized,None)
-         }
+      val authUser = userAwareRequest.identity
+      if (authUser.role.canDelete()) {
+        pcc.userService.find(id).flatMap {
+          case Some(u: User) => {
+            if (authUser.canDelete(u)) {
+              pcc.userService.delete(id)
+            } else {
+              Future.successful(Unauthorized)
+            }
+          }
+          case _ => Future.successful(None)
+        }.map { e =>
+          e match {
+            case true => HandlerResult(Ok, None)
+            case false => HandlerResult(NoContent, None)
+            case None => HandlerResult(NoContent, None)
+            case Unauthorized => HandlerResult(Unauthorized, None)
+          }
 
         }
-      }else{
+      } else {
         Future.successful(HandlerResult(Unauthorized))
       }
     }.map {
       case HandlerResult(Ok, _) => Ok
+      case HandlerResult(NoContent, _) => NoContent
+      case HandlerResult(r, None) => Status(r.header.status)(Json.toJson(Message("none result from process", r.header.status)))
+      case e => InternalServerError(Json.toJson(Message("Unexpected response")))
+    }
+  }
+
+   def getSelf = userAction.async { implicit request =>
+    silhouette.SecuredRequestHandler { userAwareRequest =>
+      val authUser = userAwareRequest.identity
+      
+        pcc.userService.find(authUser.id).map {
+          case Some(u: User) => HandlerResult(Ok, Some(u))
+          case _ => HandlerResult(NotFound, None)
+        }
+     
+    }.map {
+      case HandlerResult(Ok,Some(data)) => Ok(Json.toJson(data))
+      case HandlerResult(NoContent, _) => NoContent
+      case HandlerResult(r, None) => Status(r.header.status)(Json.toJson(Message("none result from process", r.header.status)))
+      case e => InternalServerError(Json.toJson(Message("Unexpected response")))
+    }
+  }
+
+  def get(id: Int) = userAction.async { implicit request =>
+    silhouette.SecuredRequestHandler { userAwareRequest =>
+      val authUser = userAwareRequest.identity
+      if (authUser.role.canRead() && authUser.id == id || authUser.role == Role.ADMIN) {
+        pcc.userService.find(id).flatMap {
+          case Some(u: User) => {
+            if (authUser.canRead(u)) {
+              pcc.userService.find(id)
+            } else {
+              Future.successful(Unauthorized)
+            }
+          }
+          case _ => Future.successful(None)
+        }.map { e =>
+          e match {
+            case Some(u : User) => HandlerResult(Ok, Some(Json.toJson(u)))
+            case None => HandlerResult(NoContent, None)
+            case Unauthorized => HandlerResult(Unauthorized, None)
+          }
+
+        }
+      } else {
+        Future.successful(HandlerResult(Unauthorized))
+      }
+    }.map {
+      case HandlerResult(Ok,Some(data)) => Ok(data)
       case HandlerResult(NoContent, _) => NoContent
       case HandlerResult(r, None) => Status(r.header.status)(Json.toJson(Message("none result from process", r.header.status)))
       case e => InternalServerError(Json.toJson(Message("Unexpected response")))
@@ -190,21 +195,21 @@ class UserController @Inject()(pcc: UserControllerComponents
     def success(input: UserUpdateForm): Future[(Status, Any)] = {
       val userId = authUser.id
       if (input.id == userId || authUser.role > Role.USER) {
-          for{
-            findedUser <- pcc.userService.find(input.id)
-            ret <- {
-              findedUser match {
-                case Some(u) => if(authUser.canUpdate(u)){
-                  updateUser(input)(u)
-                }else{
-                  Future.successful(Unauthorized, Message("You can't"))
-                }
-                case None => Future.successful(Status(NOT_MODIFIED), AnyContentAsEmpty)
+        for {
+          findedUser <- pcc.userService.find(input.id)
+          ret <- {
+            findedUser match {
+              case Some(u) => if (authUser.canUpdate(u)) {
+                updateUser(input)(u)
+              } else {
+                Future.successful(Unauthorized, Message("You can't"))
               }
+              case None => Future.successful(Status(NOT_MODIFIED), AnyContentAsEmpty)
             }
-          } yield {
-            ret
           }
+        } yield {
+          ret
+        }
 
       } else {
         Future.successful(Unauthorized, Message("You can't"))
@@ -227,12 +232,12 @@ class UserController @Inject()(pcc: UserControllerComponents
       pInfo <- upddatOrGetPass
       userUpdated <- pcc.userService.update(
         user.copy(
-          login = input.login.getOrElse(user.login),
+          pseudonym = input.pseudonym.getOrElse(user.pseudonym),
           email = input.email.getOrElse(user.email),
-          loginInfo = input.login.map(LoginInfo(Provider.name, _)).getOrElse(user.loginInfo),
+          loginInfo = input.pseudonym.map(LoginInfo(Provider.name, _)).getOrElse(user.loginInfo),
           passwordInfo = pInfo
         )).map { e =>
-        if (input.login.isEmpty && input.email.get != user.email) {
+        if (input.pseudonym.isEmpty && input.email.get != user.email) {
           pcc.authInfoRepository.remove(user.loginInfo)
           pcc.authInfoRepository.save(e.get.loginInfo, pInfo.get)
 
@@ -253,11 +258,11 @@ class UserController @Inject()(pcc: UserControllerComponents
 
   private def processJsonSignIn[A]()(
     implicit request: UserRequest[A]): Future[Result] = {
-    def failure(badForm: Form[UserInputForm]): Future[AuthenticatorResult] = {
+    def failure(badForm: Form[UserInputForm]): Future[Result] = {
       Future.successful(AuthenticatorResult(BadRequest(badForm.errorsAsJson)))
     }
 
-    def success(input: UserInputForm): Future[AuthenticatorResult] = {
+    def success(input: UserInputForm): Future[Result] = {
 
       val credentials = Credentials(input.email, input.password)
 
@@ -275,14 +280,17 @@ class UserController @Inject()(pcc: UserControllerComponents
 
             })
             case None =>
-              Future.failed(new IdentityNotFoundException("Couldn't find user"))
+              Future.successful(NotFound(Json.toJson(Message("cant authenticate"))))
           }
         }
       )
-
     }
 
-    formLoginUser.bindFromRequest().fold(failure, success)
+    try {
+      formLoginUser.bindFromRequest().fold(failure, success)
+    } catch {
+      case e: IdentityNotFoundException => Future.successful(NotFound(Json.toJson(Message("cant authenticate"))))
+    }
   }
 
 
@@ -292,7 +300,9 @@ class UserController @Inject()(pcc: UserControllerComponents
 
     def success(input: UserInputForm): Future[Result] = {
 
+      println(input)
       val loginInfo = LoginInfo(Provider.name, input.email)
+
       pcc.userService.retrieve(loginInfo).flatMap {
         case Some(u) => Future.successful(AuthenticatorResult(Conflict(Json.toJson(Message("User already exists")))))
         case None =>
@@ -315,7 +325,12 @@ class UserController @Inject()(pcc: UserControllerComponents
       Future.successful(BadRequest(input.errorsAsJson))
     }
 
-    formNewUser.bindFromRequest().fold(failure, success)
+    try {
+      formNewUser.bindFromRequest().fold(failure, success)
+    } catch {
+      case e: IdentityNotFoundException => Future.successful(NotFound(Json.toJson(Message("cant authenticate"))))
+    }
+
   }
 
 

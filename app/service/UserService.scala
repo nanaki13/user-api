@@ -28,7 +28,7 @@ class UserService@Inject()(userRepository: UserRepository)extends IdentityServic
   def retrieve(loginInfo: LoginInfo): Future[Option[User]] = userRepository.findByLoginInfo(loginInfo)
 
   def create(loginInfo: LoginInfo,input: UserInputForm): Future[User] = {
-    userRepository.create(User(input.login, input.email,loginInfo))
+    userRepository.create(User(input.pseudonym, input.email,loginInfo))
 
   }
 

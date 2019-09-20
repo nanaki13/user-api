@@ -6,30 +6,30 @@ import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import security.Provider
 
-final case class User(id: Int, login : String ,email: String , loginInfo: LoginInfo,role: Role,passwordInfo: Option[PasswordInfo] = None) extends Identity with WithRole[Int]
+final case class User(id: Int, pseudonym : String ,email: String , loginInfo: LoginInfo,role: Role,passwordInfo: Option[PasswordInfo] = None) extends Identity with WithRole[Int]
 object User  {
 //  implicit val noFormat: Format[Option[_]] =
 
-  def apply(login : String ,email: String ) : User = {
-    User(-1,login,email, LoginInfo(Provider.name,email),Role.USER)
+  def apply(pseudonym : String ,email: String ) : User = {
+    User(-1,pseudonym,email, LoginInfo(Provider.name,email),Role.USER)
   }
 
-  def apply(login : String ,email: String, loginInfo: LoginInfo ) : User = {
-    User(-1,login,email,loginInfo,Role.USER)
+  def apply(pseudonym : String ,email: String, loginInfo: LoginInfo ) : User = {
+    User(-1,pseudonym,email,loginInfo,Role.USER)
   }
 
-  def apply(id: Int,login : String ,email: String ) : User = {
-    User(-1,login,email, LoginInfo(Provider.name,email),Role.USER)
+  def apply(id: Int,pseudonym : String ,email: String ) : User = {
+    User(-1,pseudonym,email, LoginInfo(Provider.name,email),Role.USER)
   }
   implicit val customReads: Reads[User] = (
-    (JsPath \ "login").read[String] and
+    (JsPath \ "pseudonym").read[String] and
       (JsPath \ "email").read[String]
-    )((login, email) => User(login,email))
+    )((pseudonym, email) => User(pseudonym,email))
 
   implicit val customWrites: Writes[User] = (
-    (JsPath \ "login").write[String] and
+    (JsPath \ "pseudonym").write[String] and
       (JsPath \ "email").write[String]
-    )((user) => (user.login,user.email))
+    )((user) => (user.pseudonym,user.email))
 
   implicit val formatPass :Format[PasswordInfo]= Json.format[PasswordInfo]
   implicit val format :Format[User]= Json.format[User]

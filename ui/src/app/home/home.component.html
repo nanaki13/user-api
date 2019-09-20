@@ -1,0 +1,31 @@
+﻿<div class="card mt-4">
+    <h4 *ngIf="user.isAdmin; else elseBlock" class="card-header">Users List</h4>
+    <ng-template #elseBlock class="card-header"><h4>Hello {{user.pseudonym}}</h4></ng-template>
+    <div class="card-body">
+        <h6>Users from secure api end point</h6>
+        <div *ngIf="loading" class="spinner-border spinner-border-sm"></div>
+
+        <ng-container *ngIf="users" class="list-group">
+            <ng-container  *ngIf="users.length >1">
+
+
+                  <div class="row">
+                    <div class="col-sm">
+                        email
+                    </div>
+                    <div class="col-sm">
+                        pseudonym
+                    </div>
+                    <div class="col-sm">
+                        role
+                    </div>
+                  </div>
+
+
+            </ng-container>
+            <div *ngFor="let user of users" class="list-group-item">
+            <app-user [user]="user" ></app-user>
+            </div>
+        </ng-container>
+    </div>
+</div>

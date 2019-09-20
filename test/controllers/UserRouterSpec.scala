@@ -15,13 +15,13 @@ class UserRouterSpec extends PlaySpec with GuiceOneAppPerSuite with RouteInvoker
     Json.toJson(Json.obj(("email", e.email), ("password", e.password)))
   }
   val writerEmailLogin: Writes[UserInputForm] = (e: UserInputForm) => {
-    Json.toJson(Json.obj(("email", e.email), ("login", e.login)))
+    Json.toJson(Json.obj(("email", e.email), ("pseudonym", e.pseudonym)))
   }
   val writerEmailLoginPassowrd: Writes[UserInputForm] = (e: UserInputForm) => {
-    Json.toJson(Json.obj(("email", e.email), ("login", e.login), ("password", e.password)))
+    Json.toJson(Json.obj(("email", e.email), ("pseudonym", e.pseudonym), ("password", e.password)))
   }
   val writeForUpdate: Writes[UserUpdateForm] = (e: UserUpdateForm) => {
-    Json.toJson(Json.obj(("id", e.id),("email", e.email), ("login", e.login), ("password", e.password)))
+    Json.toJson(Json.obj(("id", e.id),("email", e.email), ("pseudonym", e.pseudonym), ("password", e.password)))
   }
   var token : Option[String]= None
   var userId : Int = -1
@@ -31,10 +31,13 @@ class UserRouterSpec extends PlaySpec with GuiceOneAppPerSuite with RouteInvoker
     "check sign In" in {
       val request = FakeRequest(POST, "/user/signUp").withHeaders(("Content-Type" , "application/json"))
       val resp: Future[Result] = route(app, request, Json.toJson(UserInputForm("test.test@test.com", "foo", "pass"))(writerEmailLoginPassowrd)).get
-      status(resp) mustBe OK
+
+      val cntString: String = contentAsString(resp)
+      println(cntString)
       val user: User = Json.fromJson[User](contentAsJson(resp)).get
-      user.login mustBe "foo"
+      user.pseudonym mustBe "foo"
       userId= user.id
+      status(resp) mustBe OK
 
     }
     "check sign Up" in {
@@ -59,7 +62,7 @@ class UserRouterSpec extends PlaySpec with GuiceOneAppPerSuite with RouteInvoker
       val resp: Future[Result] = route(app, request, Json.toJson(UserUpdateForm(userId,Some("test.test@test.com"),Some("bar"), None))(writeForUpdate)).get
       val user: User = Json.fromJson[User](contentAsJson(resp)).get
       user.email mustBe "test.test@test.com"
-      user.login mustBe "bar"
+      user.pseudonym mustBe "bar"
     }
 
     "test admin" in {

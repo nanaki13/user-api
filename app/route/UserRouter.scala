@@ -13,5 +13,7 @@ class UserRouter @Inject()(userController: UserController) extends SimpleRouter{
     case POST(p"/signIn") =>  userController.signIn
     case PUT(p"/") =>  userController.update
     case DELETE(p"/${id}"  ) =>  userController.delete(id.toInt)
+    case GET(p"/self") =>  userController.getSelf
+    case GET(p"/${id}") =>  userController.get(id.toInt)
   }
 }

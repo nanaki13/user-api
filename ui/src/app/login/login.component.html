@@ -1,0 +1,44 @@
+﻿<div class="col-md-6 offset-md-3  pt-5 mt-5">
+</div>
+  <div class="col-md-6 offset-md-3 mt-5">
+    <div class="card">
+        <h4 class="card-header">User login</h4>
+        <div class="card-body">
+            <form [formGroup]="loginForm" (ngSubmit)="onSubmit(target)">
+
+                <div class="form-group">
+                    <label for="username">Username</label><div></div>
+                    <input type="text" formControlName="username" class="form-control" [ngClass]="{ 'is-invalid': signUp && submitted && f.username.errors }" />
+                    <div *ngIf="submitted && f.username.errors" class="invalid-feedback">
+                        <div *ngIf="f.username.errors.required">Username is required</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" formControlName="email" class="form-control" [ngClass]="{ 'is-invalid': submitted && f.email.errors }" />
+                    <div *ngIf="submitted && f.email.errors" class="invalid-feedback">
+                        <div *ngIf="f.email.errors.required">Password is required</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" formControlName="password" class="form-control" [ngClass]="{ 'is-invalid':submitted && f.password.errors }" />
+                    <div *ngIf="submitted && f.password.errors" class="invalid-feedback">
+                        <div *ngIf="f.password.errors.required">Password is required</div>
+                    </div>
+                </div>
+
+                <button id="signIn" (click)="onSubmit('signIn')" [disabled]="loading" class="btn btn-primary" >
+                    <span *ngIf="loading" class="spinner-border spinner-border-sm mr-1"></span>
+                    Login
+                </button>
+              <button id="signUp" (click)="onSubmit('signUp')"  [disabled]="loading" class="btn btn-primary ml-1">
+                <span *ngIf="loading" class="spinner-border spinner-border-sm mr-1"></span>
+                Sign Up
+              </button>
+                <div *ngIf="error" class="alert alert-danger mt-3 mb-0">{{error}}</div>
+                <div *ngIf="message" class="alert alert-danger mt-3 mb-0">{{message}}</div>
+            </form>
+        </div>
+    </div>
+</div>
