@@ -10,6 +10,7 @@ export class LoginComponent implements OnInit {
     loginForm: FormGroup;
     loading = false;
     submitted = false;
+    signUp = false;
     returnUrl: string;
     error = '';
     message = ''
@@ -29,7 +30,8 @@ export class LoginComponent implements OnInit {
     ngOnInit() {
         this.loginForm = this.formBuilder.group({
             username: ['', Validators.required],
-            password: ['', Validators.required]
+            password: ['', Validators.required],
+            email: ['', Validators.required]
         });
 
         // get return url from route parameters or default to '/'
@@ -41,14 +43,15 @@ export class LoginComponent implements OnInit {
 
     onSubmit(e) {
         this.submitted = true;
-
+        this.signUp = e === 'signUp';
         // stop here if form is invalid
-        if (this.loginForm.invalid) {
+
+        if (this.loginForm.invalid && (!this.signUp && this.f.email.errors && this.f.password.errors) ) {
             return;
         }
         this.loading = true;
         if(e === 'signIn'){
-           this.authenticationService.login(this.f.username.value, this.f.password.value)
+           this.authenticationService.login(this.f.email.value,this.f.username.value, this.f.password.value)
                       .pipe(first())
                       .subscribe(
                           data => {
@@ -59,7 +62,7 @@ export class LoginComponent implements OnInit {
                               this.loading = false;
                           });
         } else{
-           this.authenticationService.signUp(this.f.username.value, this.f.password.value)
+           this.authenticationService.signUp(this.f.email.value,this.f.username.value, this.f.password.value)
                       .pipe(first())
                       .subscribe(
                           data => {
@@ -74,4 +77,6 @@ export class LoginComponent implements OnInit {
 
 
     }
+
+
 }

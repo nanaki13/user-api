@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 
 import { environment } from '@environments/environment';
 import { User } from '@app/_models';
+import { Observable } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class UserService {
@@ -10,11 +11,16 @@ export class UserService {
 
     getAll() {
 
-        return this.http.get<User[]>(`${environment.apiUrl}/users`);
+        return this.http.get<User[]>(`${environment.apiUrl}/user`);
     }
 
     getById(id : number) {
 
       return this.http.get<User[]>(`${environment.apiUrl}/user/${id}`);
-  }
+    }
+
+    getSelf() : Observable<User> {
+
+      return this.http.get<User>(`${environment.apiUrl}/user/self`);
+    }
 }

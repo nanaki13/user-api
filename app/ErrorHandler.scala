@@ -1,6 +1,6 @@
 import java.time.LocalDateTime
 
-import com.mohiva.play.silhouette.impl.exceptions.IdentityNotFoundException
+import com.mohiva.play.silhouette.impl.exceptions._
 import javax.inject.{Inject, Provider}
 import play.api._
 import play.api.http.DefaultHttpErrorHandler
@@ -73,6 +73,10 @@ class ErrorHandler(environment: Environment,
       exception: UsefulException): Future[Result] = {
     exception.cause match {
       case  e : IdentityNotFoundException => {
+        Future.successful(NotFound(Json.obj("exception" -> exception.toString)))
+      }
+      case  e : InvalidPasswordException => {
+        
         Future.successful(NotFound(Json.obj("exception" -> exception.toString)))
       }
       case _ =>   Future.successful(
