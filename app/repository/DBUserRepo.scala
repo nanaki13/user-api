@@ -33,7 +33,7 @@ class DBUserRepo @Inject()(protected val dbConfigProvider: DatabaseConfigProvide
 
     def id = column[Int]("ID", O.PrimaryKey, O.AutoInc)
 
-    def login = column[String]("LOGIN")
+    def pseudonym = column[String]("PSEUDONYM")
 
     def password = column[Option[String]]("PASSWORD")
 
@@ -43,12 +43,12 @@ class DBUserRepo @Inject()(protected val dbConfigProvider: DatabaseConfigProvide
 
     def role = column[Role]("ROLE")
 
-    def * = (id, login, mail, password, hasher, role).shaped <> (UserDB.tupled , UserDB.unapply )
+    def * = (id, pseudonym, mail, password, hasher, role).shaped <> (UserDB.tupled , UserDB.unapply )
   }
   object UserDB {
 
 
-    def unapply(u: User) =  Some(u.id, u.login, u.email, u.passwordInfo.map(_.password), u.passwordInfo.map(_.hasher), u.role)
+    def unapply(u: User) =  Some(u.id, u.pseudonym, u.email, u.passwordInfo.map(_.password), u.passwordInfo.map(_.hasher), u.role)
 
     def tupled(t: UserType): User = User(t._1, t._2, t._3, LoginInfo(Provider.name, t._3), t._6, t._4.map(PasswordInfo( t._5.get,_)))
   }

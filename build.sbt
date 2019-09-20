@@ -16,7 +16,7 @@ lazy val root = (project in file("."))
       "com.mohiva" %% "play-silhouette-crypto-jca" % "6.1.0",
       "com.mohiva" %% "play-silhouette-persistence" % "6.1.0",
       "com.typesafe.play" %% "play-slick" % "3.0.0",
-      "com.h2database" % "h2" % "1.4.199" % Test,
+      "com.h2database" % "h2" % "1.4.199" ,
       "org.postgresql" % "postgresql" % "42.2.2",
       "com.mohiva" %% "play-silhouette-testkit" % "6.1.0" % Test,
       "com.iheart" %% "ficus" % "1.4.3",

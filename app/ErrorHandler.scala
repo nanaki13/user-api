@@ -1,5 +1,6 @@
 import java.time.LocalDateTime
 
+import com.mohiva.play.silhouette.impl.exceptions.IdentityNotFoundException
 import javax.inject.{Inject, Provider}
 import play.api._
 import play.api.http.DefaultHttpErrorHandler
@@ -70,8 +71,14 @@ class ErrorHandler(environment: Environment,
   override protected def onDevServerError(
       request: RequestHeader,
       exception: UsefulException): Future[Result] = {
-    Future.successful(
-      InternalServerError(Json.obj("exception" -> exception.toString)))
+    exception.cause match {
+      case  e : IdentityNotFoundException => {
+        Future.successful(NotFound(Json.obj("exception" -> exception.toString)))
+      }
+      case _ =>   Future.successful(
+        InternalServerError(Json.obj("exception" -> exception.toString)))
+    }
+
   }
 
   override protected def onProdServerError(
